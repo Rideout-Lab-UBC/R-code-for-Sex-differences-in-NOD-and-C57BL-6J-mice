@@ -1,0 +1,160 @@
+#Carling's Paper
+#Figure 1B
+
+#clear environment
+rm(list = ls())
+
+library(ComplexHeatmap)
+library(dplyr)
+library(furrr)
+library(ggbeeswarm)
+library(ggforce)
+library(ggplot2)
+library(grid)
+library(gridSVG)
+library(pcaMethods)
+library(scales)
+library(stringr)
+library(this.path)
+library(tidyr)
+library(VennDiagram)
+library(zoo)
+
+#import files
+
+
+df_pathway_genes_female <- read.csv("B6_FemaleBiasedPathways.csv", check.names = T)
+df_pathway_genes_male <- read.csv("B6_MaleBiasedPathways.csv", check.names = T)
+
+#add column for sex
+df_pathway_genes_female$sex <- "Female"
+df_pathway_genes_male$sex <- "Male"
+
+#calculate ratio of number of genes from data in pathway to total number of recognized genes from data
+df_pathway_genes_female$Gene.ratio <- df_pathway_genes_female$X.Entities.found/75
+df_pathway_genes_male$Gene.ratio <- df_pathway_genes_male$X.Entities.found/39
+
+#get -log10 of FDR
+df_pathway_genes_female$transf.log.10.FDR <- -log10(df_pathway_genes_female$Entities.FDR)
+df_pathway_genes_male$transf.log.10.FDR <- -log10(df_pathway_genes_male$Entities.FDR)
+
+#order by gene ratio
+df_pathway_genes_female <- dplyr::arrange(df_pathway_genes_female, Gene.ratio)
+df_pathway_genes_male <- dplyr::arrange(df_pathway_genes_male, desc(Gene.ratio))
+
+#order by -log10(FDR)
+df_pathway_genes_female <- dplyr::arrange(df_pathway_genes_female, desc(transf.log.10.FDR))
+df_pathway_genes_male <- dplyr::arrange(df_pathway_genes_male, desc(transf.log.10.FDR))
+
+#flip males to negative side
+df_pathway_genes_male$transf.log.10.FDR <- -df_pathway_genes_male$transf.log.10.FDR
+
+#select top 20 pathways
+df_pathway_genes_female <- head(df_pathway_genes_female, 20)
+df_pathway_genes_male <- head(df_pathway_genes_male, 20)
+
+#filter for FDR < 0.05
+df_pathway_genes_female <- df_pathway_genes_female[df_pathway_genes_female$Entities.FDR < 0.05,] 
+df_pathway_genes_male <- df_pathway_genes_male[df_pathway_genes_male$Entities.FDR < 0.05,] 
+
+#order by -log10(FDR)
+df_pathway_genes_female <- dplyr::arrange(df_pathway_genes_female, transf.log.10.FDR)
+
+#combine males and females
+df_separated <- rbind(df_pathway_genes_male, df_pathway_genes_female)
+
+#categorize significance
+df_separated$significance <- ifelse(df_separated$Entities.FDR < 0.01, "< 0.01", ifelse(df_separated$Entities.FDR > 0.01 & df_separated$Entities.FDR < 0.05, "0.01-0.05", "> 0.05"))
+
+#set pathway factor levels
+df_separated$Pathway.name <- factor(df_separated$Pathway.name, levels = df_separated$Pathway.name)
+
+#set significance factor levels
+df_separated$significance <- factor(df_separated$significance, levels = sort(unique(df_separated$significance))[c(1, 3, 2)])
+
+#set axis limits and label position
+left_limit <- -5
+right_limit <- 15
+
+top_label_height_multiplier <- 1.015
+
+num_row <- nrow(df_separated)
+num_row_bottom <- length(df_separated$sex[df_separated$sex == "Male"])
+
+#create plot
+ggplot2::ggplot(df_separated, ggplot2::aes(x = transf.log.10.FDR, y = Pathway.name)) +
+  
+  ggplot2::geom_point(alpha = 0) +
+  
+  ggplot2::geom_point(ggplot2::aes(colour = sex, 
+                                   fill = sex,
+                                   size = Gene.ratio, 
+                                   shape = significance),
+                      stroke = 1,
+                      data = df_separated[df_separated$significance == "< 0.01",]) +
+  
+  ggplot2::geom_point(aes(size = Gene.ratio, 
+                          shape = significance),
+                      stroke = 1,
+                      colour = "grey", 
+                      data = df_separated[df_separated$significance == "> 0.05",]) +
+  
+  ggplot2::geom_point(ggplot2::aes(colour = sex, 
+                                   size = Gene.ratio, 
+                                   shape = significance),
+                      stroke = 1,
+                      data = df_separated[df_separated$significance == "0.01-0.05",]) +
+  
+  
+  ggplot2::coord_cartesian(xlim = c(left_limit, right_limit), ylim = c(0.5, nrow(df_separated) + 0.5), expand = FALSE, clip = "off") +
+  
+  ggplot2::annotate(geom = "segment", x = 0, xend = 0, y = 0.5, yend = nrow(df_separated) + 0.5, size = 0.5) +
+  ggplot2::annotate(geom = "segment", x = left_limit, xend = right_limit, y = num_row_bottom + 0.5, yend = num_row_bottom + 0.5, size = 0.5) +
+  
+  ggplot2::annotate(geom = "segment", x = left_limit, xend = 0, y = num_row * top_label_height_multiplier + 0.75, yend = num_row * top_label_height_multiplier + 0.75, colour = "#c8e710", size = 8) +
+  ggplot2::annotate(geom = "segment", x = 0, xend = right_limit, y = num_row * top_label_height_multiplier + 0.75, yend = num_row * top_label_height_multiplier + 0.75, colour = "#7280d6", size = 8) +
+  ggplot2::annotate(geom = "segment", x = -(right_limit - left_limit) * 0.0075, xend = (right_limit - left_limit) * 0.0075, y = num_row * top_label_height_multiplier + 0.75, yend = num_row * top_label_height_multiplier + 0.75, colour = "#FFFFFF", size = 8) +
+  ggplot2::annotate(geom = "text", x = left_limit/2, y = num_row * top_label_height_multiplier + 0.75, label = c("Male"), size = 4) +
+  ggplot2::annotate(geom = "text", x = right_limit/2, y = num_row * top_label_height_multiplier + 0.75, label = c("Female")) +
+  ggplot2::annotate(geom = "text", x = left_limit - (right_limit - left_limit) * 0.035, y = num_row * top_label_height_multiplier + 0.75, label = c("Sex"), hjust = 1) +
+  
+  ggplot2::scale_color_manual(values = c("#7280d6", "#c8e710")) +
+  
+  ggplot2::scale_fill_manual(values = c("#7280d6", "#c8e710")) +
+  
+  ggplot2::scale_size_continuous(limits = c(min(df_separated$Gene.ratio) - 0.05, max(df_separated$Gene.ratio) + 0.05),
+                                 breaks = seq(0, 0.3, by = 0.05)) +
+  
+  ggplot2::scale_shape_manual(values = c(21, 21, 21)) +
+  
+  ggplot2::scale_y_discrete(labels = gsub("\\\\n", "\n", as.character(df_separated$Pathway.name))) +
+  
+  ggplot2::labs(x = bquote(-log[10]*"(FDR)"), colour = "Sex", size = "Gene Ratio", shape = "Significance") +
+  
+  ggplot2::guides(
+    fill = "none",
+    shape = guide_legend(override.aes = list(size = 4, 
+                                             fill = c("black", "white")), 
+                         order = 3),
+    colour = guide_legend(reverse = T, override.aes = list(size = 4), 
+                          order = 1),
+    size = guide_legend(reverse = T, 
+                        order = 2)
+  ) +
+  
+  ggplot2::theme_bw() +
+  
+  ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5, size = 12, margin = ggplot2::margin(b = 0.5, unit = "cm")),
+                 plot.margin = ggplot2::margin(t = 2, r = 1, b = 1, l = 1, unit = "cm"),
+                 axis.text = ggplot2::element_text(size = 12, colour = "black"),
+                 axis.title.x = ggplot2::element_text(size = 12),
+                 axis.title.y = ggplot2::element_blank(),
+                 panel.grid.minor = ggplot2::element_blank(),
+                 legend.title.align = 0.5,
+                 legend.direction = "vertical",
+                 legend.box.just = "center",
+                 legend.key.width = grid::unit(0.75, "cm"),
+                 legend.margin = ggplot2::margin(t = 0.5, r = 0, b = 0, l = 0, unit = "cm"),
+                 legend.box.margin = ggplot2::margin(t = 0, r = 0, b = 0, l = 0, unit = "cm"),
+                 aspect.ratio = 16/5)
+
