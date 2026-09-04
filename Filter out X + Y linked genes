@@ -1,0 +1,58 @@
+#Filtering out genes on sex chromosomes
+
+#C57BL/6J
+
+#load packages
+
+library(dplyr)
+library(stringr)
+library(tidyr)
+
+
+#clear environment
+rm(list = ls())
+
+
+#setwd 
+
+#Load files 
+
+B6_DESEQ2 <- read.csv("B6_Male_vs_B6_Female_WorkingDoc.csv")
+
+Sex <- read.csv("Sex_Chromosomes.csv")
+
+#Filtering out values from column "gene" from your main file if they match genes listed under column "gene" in your second file
+
+NS_BMvsBF_FULL <- B6_DESEQ2 %>% filter(!(Gene %in% Sex$Gene))
+
+#save this file 
+
+write.csv(NS_BMvsBF_FULL, file = "B6_DESEQ2_NoSexChrome_18.June.26.csv", row.names = FALSE)
+
+#NOD
+
+#load packages
+
+library(dplyr)
+library(stringr)
+library(tidyr)
+
+
+#clear environment
+rm(list = ls())
+
+#setwd 
+
+#Load files 
+
+NOD_DESEQ2 <- read.csv("NOD_Male_vs_NOD_Female_WorkingDoc.csv")
+
+Sex <- read.csv("Sex_Chromosomes.csv")
+
+#Filtering out values from column "gene" from your main file if they match genes listed under column "gene" in your second file
+
+NS_NMvsNF_FULL <- B6_DESEQ2 %>% filter(!(Gene %in% Sex$Gene))
+
+#save this file 
+
+write.csv(NS_NMvsNF_FULL, file = "NOD_DESEQ2_NoSexChrome_18.June.26.csv", row.names = FALSE)
